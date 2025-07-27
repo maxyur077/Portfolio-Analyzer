@@ -1,0 +1,539 @@
+<!-- templates/splits.html -->
+{% extends "base.html" %} {% block title %}Split Analysis - Portfolio Analyzer{%
+endblock %} {% block content %}
+<div class="container-fluid">
+  <!-- Page Header -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <h1 class="h3 mb-0 text-gray-800">Stock Split Analysis</h1>
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+              <a href="{{ url_for('dashboard') }}">Dashboard</a>
+            </li>
+            <li class="breadcrumb-item active">Split Analysis</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+
+  <!-- Split Summary Cards -->
+  <div class="row mb-4">
+    <div class="col-md-4">
+      <div class="card border-left-info shadow">
+        <div class="card-body">
+          <div class="row no-gutters align-items-center">
+            <div class="col mr-2">
+              <div
+                class="text-xs font-weight-bold text-info text-uppercase mb-1"
+              >
+                Total Splits Detected
+              </div>
+              <div
+                class="h4 mb-0 font-weight-bold text-gray-800"
+                id="totalSplits"
+              >
+                <div
+                  class="spinner-border spinner-border-sm text-primary"
+                  role="status"
+                ></div>
+              </div>
+            </div>
+            <div class="col-auto">
+              <i class="fas fa-code-branch fa-2x text-gray-300"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card border-left-warning shadow">
+        <div class="card-body">
+          <div class="row no-gutters align-items-center">
+            <div class="col mr-2">
+              <div
+                class="text-xs font-weight-bold text-warning text-uppercase mb-1"
+              >
+                Stocks Affected
+              </div>
+              <div
+                class="h4 mb-0 font-weight-bold text-gray-800"
+                id="affectedStocks"
+              >
+                <div
+                  class="spinner-border spinner-border-sm text-primary"
+                  role="status"
+                ></div>
+              </div>
+            </div>
+            <div class="col-auto">
+              <i class="fas fa-chart-line fa-2x text-gray-300"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card border-left-success shadow">
+        <div class="card-body">
+          <div class="row no-gutters align-items-center">
+            <div class="col mr-2">
+              <div
+                class="text-xs font-weight-bold text-success text-uppercase mb-1"
+              >
+                Trades Adjusted
+              </div>
+              <div
+                class="h4 mb-0 font-weight-bold text-gray-800"
+                id="tradesAdjusted"
+              >
+                <div
+                  class="spinner-border spinner-border-sm text-primary"
+                  role="status"
+                ></div>
+              </div>
+            </div>
+            <div class="col-auto">
+              <i class="fas fa-exchange-alt fa-2x text-gray-300"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Split History Table -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card shadow mb-4">
+        <div class="card-header py-3">
+          <h6 class="m-0 font-weight-bold text-primary">
+            Detected Stock Splits
+          </h6>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="splitsTable">
+              <thead class="thead-light">
+                <tr>
+                  <th>Symbol</th>
+                  <th>Split Date</th>
+                  <th>Split Ratio</th>
+                  <th>Price Before</th>
+                  <th>Price After</th>
+                  <th>Price Change</th>
+                  <th>Trades Affected</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="splitsTableBody">
+                <tr>
+                  <td colspan="8" class="text-center">
+                    <div
+                      class="spinner-border spinner-border-sm text-primary"
+                      role="status"
+                    ></div>
+                    Loading split data...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Price Adjustment Impact Charts -->
+  <div class="row">
+    <div class="col-12">
+      <div class="card shadow mb-4">
+        <div class="card-header py-3">
+          <h6 class="m-0 font-weight-bold text-primary">
+            Price Adjustment Impact
+          </h6>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header">
+                  <h6 class="text-primary">Before Split Adjustment</h6>
+                </div>
+                <div class="card-body">
+                  <canvas id="beforeSplitChart" height="200"></canvas>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header">
+                  <h6 class="text-success">After Split Adjustment</h6>
+                </div>
+                <div class="card-body">
+                  <canvas id="afterSplitChart" height="200"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="row mt-3">
+            <div class="col-12">
+              <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i>
+                <strong>Note:</strong> The charts above show how stock prices
+                are adjusted for splits to maintain historical accuracy. The
+                "Before" chart shows original prices, while the "After" chart
+                shows split-adjusted prices.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  let beforeChart;
+  let afterChart;
+
+  // Native JavaScript tooltip implementation
+  function initTooltips() {
+    const tooltipElements = document.querySelectorAll(
+      '[data-toggle="tooltip"]'
+    );
+    tooltipElements.forEach((element) => {
+      element.addEventListener("mouseenter", function (e) {
+        showTooltip(e.target, e.target.getAttribute("title"));
+      });
+
+      element.addEventListener("mouseleave", function (e) {
+        hideTooltip();
+      });
+    });
+  }
+
+  function showTooltip(element, text) {
+    const tooltip = document.createElement("div");
+    tooltip.className = "custom-tooltip";
+    tooltip.innerHTML = text;
+    tooltip.style.cssText = `
+    position: absolute;
+    background: #333;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 1000;
+    white-space: nowrap;
+    pointer-events: none;
+  `;
+
+    document.body.appendChild(tooltip);
+
+    const rect = element.getBoundingClientRect();
+    tooltip.style.left =
+      rect.left + rect.width / 2 - tooltip.offsetWidth / 2 + "px";
+    tooltip.style.top = rect.top - tooltip.offsetHeight - 8 + "px";
+  }
+
+  function hideTooltip() {
+    const tooltip = document.querySelector(".custom-tooltip");
+    if (tooltip) {
+      tooltip.remove();
+    }
+  }
+
+  // Load split analysis data
+  async function loadSplitAnalysis() {
+    try {
+      const response = await fetch("/api/splits-analysis");
+      const data = await response.json();
+
+      console.log("Split analysis data:", data);
+
+      // Update summary cards
+      document.getElementById("totalSplits").textContent =
+        data.total_splits || 0;
+      document.getElementById("affectedStocks").textContent =
+        data.affected_stocks || 0;
+      document.getElementById("tradesAdjusted").textContent =
+        data.trades_adjusted || 0;
+
+      // Populate splits table
+      const tbody = document.getElementById("splitsTableBody");
+      if (data.splits && data.splits.length > 0) {
+        tbody.innerHTML = data.splits
+          .map((split) => {
+            const priceChange =
+              split.price_before > 0 && split.price_after > 0
+                ? ((split.price_after - split.price_before) /
+                    split.price_before) *
+                  100
+                : 0;
+
+            return `
+          <tr class="split-row" data-toggle="tooltip" 
+              title="Split Ratio: ${split.ratio}:1 | Adjusted ${
+              split.trades_affected
+            } trades">
+            <td><strong>${split.symbol}</strong></td>
+            <td>${new Date(split.date).toLocaleDateString()}</td>
+            <td>
+              <span class="badge badge-primary split-ratio" 
+                    data-toggle="tooltip" 
+                    title="Each share became ${split.ratio} shares">
+                ${split.ratio}:1
+              </span>
+            </td>
+            <td>$${split.price_before.toFixed(2)}</td>
+            <td>$${split.price_after.toFixed(2)}</td>
+            <td class="${priceChange >= 0 ? "text-success" : "text-danger"}">
+              ${priceChange >= 0 ? "+" : ""}${priceChange.toFixed(1)}%
+            </td>
+            <td>
+              <span class="badge badge-info" 
+                    data-toggle="tooltip" 
+                    title="${
+                      split.trades_affected
+                    } trades were adjusted for this split">
+                ${split.trades_affected}
+              </span>
+            </td>
+            <td><span class="badge badge-success">Adjusted</span></td>
+          </tr>
+        `;
+          })
+          .join("");
+
+        // Initialize custom tooltips
+        initTooltips();
+
+        // Load comparison charts
+        loadComparisonCharts(data.splits);
+      } else {
+        tbody.innerHTML = `
+        <tr>
+          <td colspan="8" class="text-center text-muted">
+            <i class="fas fa-info-circle"></i> No stock splits detected in your portfolio
+          </td>
+        </tr>
+      `;
+      }
+    } catch (error) {
+      console.error("Error loading split analysis:", error);
+      document.getElementById("splitsTableBody").innerHTML = `
+      <tr>
+        <td colspan="8" class="text-center text-danger">
+          <i class="fas fa-exclamation-triangle"></i> Error loading split data
+        </td>
+      </tr>
+    `;
+    }
+  }
+
+  // Load comparison charts
+  function loadComparisonCharts(splits) {
+    if (!splits || splits.length === 0) {
+      createPlaceholderChart("beforeSplitChart", "No split data available");
+      createPlaceholderChart("afterSplitChart", "No split data available");
+      return;
+    }
+
+    const symbols = splits.map((s) => s.symbol);
+    const beforePrices = splits.map((s) => s.price_before);
+    const afterPrices = splits.map((s) => s.price_after);
+    const colors = ["#4e73df", "#1cc88a", "#36b9cc", "#f6c23e", "#e74a3b"];
+
+    // Before split chart
+    const beforeCtx = document
+      .getElementById("beforeSplitChart")
+      .getContext("2d");
+    if (beforeChart) beforeChart.destroy();
+
+    beforeChart = new Chart(beforeCtx, {
+      type: "bar",
+      data: {
+        labels: symbols,
+        datasets: [
+          {
+            label: "Price Before Split",
+            data: beforePrices,
+            backgroundColor: colors[0],
+            borderColor: colors[0],
+            borderWidth: 1,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (context) {
+                const split = splits[context.dataIndex];
+                return [
+                  `Price: $${context.parsed.y.toFixed(2)}`,
+                  `Split Ratio: ${split.ratio}:1`,
+                  `Date: ${new Date(split.date).toLocaleDateString()}`,
+                ];
+              },
+            },
+          },
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function (value) {
+                return "$" + value.toFixed(2);
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // After split chart
+    const afterCtx = document
+      .getElementById("afterSplitChart")
+      .getContext("2d");
+    if (afterChart) afterChart.destroy();
+
+    afterChart = new Chart(afterCtx, {
+      type: "bar",
+      data: {
+        labels: symbols,
+        datasets: [
+          {
+            label: "Price After Split",
+            data: afterPrices,
+            backgroundColor: colors[1],
+            borderColor: colors[1],
+            borderWidth: 1,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (context) {
+                const split = splits[context.dataIndex];
+                const adjustment =
+                  (split.price_before / split.price_after - 1) * 100;
+                return [
+                  `Adjusted Price: $${context.parsed.y.toFixed(2)}`,
+                  `Original Price: $${split.price_before.toFixed(2)}`,
+                  `Adjustment: ${adjustment.toFixed(1)}%`,
+                  `Split Ratio: ${split.ratio}:1`,
+                ];
+              },
+            },
+          },
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function (value) {
+                return "$" + value.toFixed(2);
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // Create placeholder chart when no data is available
+  function createPlaceholderChart(canvasId, message) {
+    const ctx = document.getElementById(canvasId).getContext("2d");
+    new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: ["No Data"],
+        datasets: [
+          {
+            label: message,
+            data: [0],
+            backgroundColor: "#e3e6f0",
+            borderColor: "#d1d3e2",
+            borderWidth: 1,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+          },
+        },
+      },
+    });
+  }
+
+  // Initialize page
+  document.addEventListener("DOMContentLoaded", function () {
+    loadSplitAnalysis();
+  });
+</script>
+
+<style>
+  .split-row:hover {
+    background-color: #f8f9fc;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+
+  .split-ratio {
+    font-weight: bold;
+    font-size: 0.9em;
+  }
+
+  .badge {
+    font-size: 0.8em;
+  }
+
+  .chart-container {
+    position: relative;
+    height: 250px;
+  }
+
+  .custom-tooltip {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .alert-info {
+    border-left: 4px solid #36b9cc;
+  }
+
+  /* Hover effects for better UX */
+  .badge:hover {
+    transform: scale(1.05);
+    transition: transform 0.1s ease;
+  }
+
+  .card:hover {
+    transform: translateY(-2px);
+    transition: transform 0.2s ease;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+</style>
+{% endblock %}

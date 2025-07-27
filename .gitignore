@@ -1,0 +1,37 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+
+# Environment & API keys
+.env*
+credentials.json
+token.json
+*-credentials.json
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Build outputs
+build/
+dist/
+*.crx
+*.pem
+
+# User data
+resumes/
+*.pdf
+*.docx
+application-history.json
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

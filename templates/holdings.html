@@ -1,0 +1,267 @@
+{% extends "base.html" %} {% block title %}Holdings Details - Portfolio
+Analyzer{% endblock %} {% block content %}
+<div class="container-fluid">
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <h1 class="h3 mb-0 text-gray-800">Holdings Details</h1>
+        <div>
+          <button
+            class="btn btn-outline-primary btn-sm"
+            onclick="refreshPrices()"
+          >
+            <i class="fas fa-sync-alt"></i> Refresh
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Holdings Summary -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card shadow">
+        <div class="card-header py-3">
+          <h6 class="m-0 font-weight-bold text-primary">
+            Portfolio Holdings Analysis
+          </h6>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table
+              class="table table-bordered table-hover table-striped"
+              id="detailedHoldingsTable"
+            >
+              <thead class="thead-dark">
+                <tr>
+                  <th rowspan="2">Symbol</th>
+                  <th colspan="3" class="text-center">Position</th>
+                  <th colspan="3" class="text-center">Price</th>
+                  <th colspan="3" class="text-center">Performance</th>
+                </tr>
+                <tr>
+                  <th>Quantity</th>
+                  <th>Market Value</th>
+                  <th>% of Portfolio</th>
+                  <th>Avg Cost</th>
+                  <th>Current Price</th>
+                  <th>Change %</th>
+                  <th>Unrealized P&L</th>
+                  <th>XIRR %</th>
+                  <th>Total Return %</th>
+                </tr>
+              </thead>
+              <tbody id="detailedHoldingsBody">
+                <tr>
+                  <td colspan="11" class="text-center">
+                    <div class="spinner"></div>
+                    Loading holdings data...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Holding Detail Modal -->
+  <div class="modal fade" id="holdingDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalTitle">Holding Details</h5>
+        </div>
+        <div class="modal-body" id="modalBody">
+          <!-- Content will be loaded dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  // Load detailed holdings
+  async function refreshPrices() {
+    const refreshBtn = document.getElementById("refreshBtn");
+    const refreshIcon = document.getElementById("refreshIcon");
+
+    // Disable button and show loading
+    refreshBtn.disabled = true;
+    refreshIcon.classList.add("fa-spin");
+    refreshBtn.innerHTML =
+      '<i class="fas fa-sync-alt fa-sm text-white-50 fa-spin"></i> Refreshing...';
+
+    try {
+      const response = await fetch("/api/refresh-prices", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        // Reload the page to show updated data
+        location.reload();
+      } else {
+        throw new Error("Failed to refresh prices");
+      }
+    } catch (error) {
+      console.error("Error refreshing prices:", error);
+      alert("Failed to refresh prices. Please try again.");
+
+      // Reset button
+      refreshBtn.disabled = false;
+      refreshIcon.classList.remove("fa-spin");
+      refreshBtn.innerHTML =
+        '<i class="fas fa-sync-alt fa-sm text-white-50"></i> Refresh Prices';
+    }
+  }
+
+  async function loadDetailedHoldings() {
+    try {
+      const response = await fetch("/api/holdings-detailed");
+      const data = await response.json();
+
+      const tbody = document.getElementById("detailedHoldingsBody");
+
+      if (data.holdings && Object.keys(data.holdings).length > 0) {
+        const totalValue = data.total_portfolio_value;
+
+        tbody.innerHTML = Object.entries(data.holdings)
+          .map(([symbol, holding]) => {
+            const percentOfPortfolio =
+              (holding.market_value / totalValue) * 100;
+            const priceChange =
+              ((holding.current_price - holding.avg_cost) / holding.avg_cost) *
+              100;
+            const totalReturn =
+              (holding.unrealized_pnl / (holding.avg_cost * holding.quantity)) *
+              100;
+
+            return `
+                    <tr onclick="showHoldingDetail('${symbol}')">
+                        <td><strong>${symbol}</strong></td>
+                        <td>${holding.quantity.toFixed(2)}</td>
+                        <td>$${holding.market_value.toLocaleString("en-US", {
+                          minimumFractionDigits: 2,
+                        })}</td>
+                        <td>${percentOfPortfolio.toFixed(1)}%</td>
+                        <td>$${holding.avg_cost.toFixed(2)}</td>
+                        <td>$${holding.current_price.toFixed(2)}</td>
+                        <td class="${
+                          priceChange >= 0 ? "text-success" : "text-danger"
+                        }">
+                            ${priceChange >= 0 ? "+" : ""}${priceChange.toFixed(
+              1
+            )}%
+                        </td>
+                        <td class="${
+                          holding.unrealized_pnl >= 0
+                            ? "text-success"
+                            : "text-danger"
+                        }">
+                            ${
+                              holding.unrealized_pnl >= 0 ? "+" : ""
+                            }$${holding.unrealized_pnl.toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+            })}
+                        </td>
+                        <td class="${
+                          holding.xirr >= 0 ? "text-success" : "text-danger"
+                        }">
+                            ${
+                              holding.xirr
+                                ? (holding.xirr * 100).toFixed(1) + "%"
+                                : "N/A"
+                            }
+                        </td>
+                        <td class="${
+                          totalReturn >= 0 ? "text-success" : "text-danger"
+                        }">
+                            ${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(
+              1
+            )}%
+                        </td>
+                    </tr>
+                `;
+          })
+          .join("");
+      } else {
+        tbody.innerHTML = `
+                <tr>
+                    <td colspan="11" class="text-center text-muted">
+                        <i class="fas fa-info-circle"></i> No holdings found
+                    </td>
+                </tr>
+            `;
+      }
+    } catch (error) {
+      console.error("Error loading detailed holdings:", error);
+      document.getElementById("detailedHoldingsBody").innerHTML = `
+            <tr>
+                <td colspan="11" class="text-center text-danger">
+                    <i class="fas fa-exclamation-triangle"></i> Error loading holdings data
+                </td>
+            </tr>
+        `;
+    }
+  }
+
+  // Show holding detail modal
+  async function showHoldingDetail(symbol) {
+    try {
+      const response = await fetch(`/api/holding-detail/${symbol}`);
+      const data = await response.json();
+
+      document.getElementById(
+        "modalTitle"
+      ).textContent = `${symbol} - Detailed Analysis`;
+      document.getElementById("modalBody").innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Position Information</h6>
+                    <table class="table table-sm">
+                        <tr><td>Quantity:</td><td>${data.quantity.toFixed(
+                          2
+                        )}</td></tr>
+                        <tr><td>Average Cost:</td><td>$${data.avg_cost.toFixed(
+                          2
+                        )}</td></tr>
+                        <tr><td>Current Price:</td><td>$${data.current_price.toFixed(
+                          2
+                        )}</td></tr>
+                        <tr><td>Market Value:</td><td>$${data.market_value.toLocaleString()}</td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6>Performance Metrics</h6>
+                    <table class="table table-sm">
+                        <tr><td>Unrealized P&L:</td><td class="${
+                          data.unrealized_pnl >= 0
+                            ? "text-success"
+                            : "text-danger"
+                        }">$${data.unrealized_pnl.toLocaleString()}</td></tr>
+                        <tr><td>XIRR:</td><td>${
+                          data.xirr ? (data.xirr * 100).toFixed(2) + "%" : "N/A"
+                        }</td></tr>
+                        <tr><td>Total Trades:</td><td>${
+                          data.total_trades || "N/A"
+                        }</td></tr>
+                        <tr><td>Currency:</td><td>${data.currency}</td></tr>
+                    </table>
+                </div>
+            </div>
+        `;
+
+      $("#holdingDetailModal").modal("show");
+    } catch (error) {
+      console.error("Error loading holding detail:", error);
+    }
+  }
+
+  // Initialize page
+  document.addEventListener("DOMContentLoaded", loadDetailedHoldings);
+</script>
+{% endblock %}

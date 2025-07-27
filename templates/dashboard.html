@@ -1,0 +1,343 @@
+<!-- templates/dashboard.html -->
+{% extends "base.html" %} {% block title %}Dashboard - Portfolio Analyzer{%
+endblock %} {% block content %}
+<div class="container-fluid">
+  <!-- Loading State -->
+  {% if loading %}
+  <div class="row justify-content-center mt-5">
+    <div class="col-md-6">
+      <div class="card shadow text-center">
+        <div class="card-body">
+          <div class="spinner-border text-primary mb-3" role="status">
+            <span class="sr-only">Loading...</span>
+          </div>
+          <h4>Loading Portfolio Data</h4>
+          <p class="text-muted">
+            Please wait while we process your trading data...
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% elif error %}
+  <!-- Error State -->
+  <div class="row justify-content-center mt-5">
+    <div class="col-md-6">
+      <div class="card shadow border-left-danger">
+        <div class="card-body text-center">
+          <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+          <h4>Error Loading Data</h4>
+          <p class="text-muted">{{ error }}</p>
+          <button class="btn btn-primary" onclick="location.reload()">
+            <i class="fas fa-redo"></i> Retry
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <!-- Portfolio Header -->
+  <div class="d-sm-flex align-items-center justify-content-between mb-4">
+    <h1 class="h3 mb-0 text-gray-800">
+      <i class="fas fa-chart-pie text-primary"></i> Portfolio Dashboard
+    </h1>
+    <div class="d-none d-sm-inline-block">
+      <button
+        class="btn btn-primary btn-sm shadow-sm"
+        onclick="refreshPrices()"
+        id="refreshBtn"
+      >
+        <i class="fas fa-sync-alt fa-sm text-white-50" id="refreshIcon"></i>
+        Refresh Prices
+      </button>
+    </div>
+  </div>
+
+  <!-- Content Row - Summary Cards -->
+  <div class="row">
+    <!-- Total Holdings Card -->
+    <div class="col-xl-3 col-md-6 mb-4">
+      <div class="card border-left-primary shadow h-100 py-2">
+        <div class="card-body">
+          <div class="row no-gutters align-items-center">
+            <div class="col mr-2">
+              <div
+                class="text-xs font-weight-bold text-primary text-uppercase mb-1"
+              >
+                Total Holdings
+              </div>
+              <div class="h5 mb-0 font-weight-bold text-gray-800">
+                {{ summary.total_holdings }}
+              </div>
+            </div>
+            <div class="col-auto">
+              <i class="fas fa-chart-pie fa-2x text-gray-300"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Portfolio Value (USD) Card -->
+    <div class="col-xl-3 col-md-6 mb-4">
+      <div class="card border-left-success shadow h-100 py-2">
+        <div class="card-body">
+          <div class="row no-gutters align-items-center">
+            <div class="col mr-2">
+              <div
+                class="text-xs font-weight-bold text-success text-uppercase mb-1"
+              >
+                Portfolio Value (USD)
+              </div>
+              <div class="h5 mb-0 font-weight-bold text-gray-800">
+                ${{ "{:,.2f}".format(summary.total_value_usd) }}
+              </div>
+            </div>
+            <div class="col-auto">
+              <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Portfolio Value (SGD) Card -->
+    <div class="col-xl-3 col-md-6 mb-4">
+      <div class="card border-left-info shadow h-100 py-2">
+        <div class="card-body">
+          <div class="row no-gutters align-items-center">
+            <div class="col mr-2">
+              <div
+                class="text-xs font-weight-bold text-info text-uppercase mb-1"
+              >
+                Portfolio Value (SGD)
+              </div>
+              <div class="h5 mb-0 font-weight-bold text-gray-800">
+                S${{ "{:,.2f}".format(summary.total_value_sgd) }}
+              </div>
+            </div>
+            <div class="col-auto">
+              <i class="fas fa-coins fa-2x text-gray-300"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Unrealized P&L Card -->
+    <div class="col-xl-3 col-md-6 mb-4">
+      <div class="card border-left-warning shadow h-100 py-2">
+        <div class="card-body">
+          <div class="row no-gutters align-items-center">
+            <div class="col mr-2">
+              <div
+                class="text-xs font-weight-bold text-warning text-uppercase mb-1"
+              >
+                Unrealized P&L
+              </div>
+              <div
+                class="h5 mb-0 font-weight-bold {{ 'text-success' if summary.total_unrealized_pnl >= 0 else 'text-danger' }}"
+              >
+                {{ '+' if summary.total_unrealized_pnl >= 0 else '' }}${{
+                "{:,.2f}".format(summary.total_unrealized_pnl) }}
+              </div>
+            </div>
+            <div class="col-auto">
+              <i class="fas fa-chart-line fa-2x text-gray-300"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content Row - Charts -->
+  <div class="row">
+    <!-- Area Chart -->
+    <div class="col-xl-8 col-lg-7">
+      <div class="card shadow mb-4">
+        <div
+          class="card-header py-3 d-flex flex-row align-items-center justify-content-between"
+        >
+          <h6 class="m-0 font-weight-bold text-primary">
+            Portfolio Value Over Time
+          </h6>
+          <div class="dropdown no-arrow">
+            <a
+              class="dropdown-toggle"
+              href="#"
+              role="button"
+              id="dropdownMenuLink"
+              data-toggle="dropdown"
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
+              <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+            </a>
+            <div
+              class="dropdown-menu dropdown-menu-right shadow animated--fade-in"
+              aria-labelledby="dropdownMenuLink"
+            >
+              <div class="dropdown-header">Currency:</div>
+              <a
+                class="dropdown-item"
+                href="#"
+                onclick="changeChartCurrency('USD')"
+                >USD</a
+              >
+              <a
+                class="dropdown-item"
+                href="#"
+                onclick="changeChartCurrency('SGD')"
+                >SGD</a
+              >
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="chart-area">
+            <canvas id="myAreaChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pie Chart -->
+    <div class="col-xl-4 col-lg-5">
+      <div class="card shadow mb-4">
+        <div
+          class="card-header py-3 d-flex flex-row align-items-center justify-content-between"
+        >
+          <h6 class="m-0 font-weight-bold text-primary">Holdings Breakdown</h6>
+        </div>
+        <div class="card-body">
+          <div class="chart-pie pt-4 pb-2">
+            <canvas id="myPieChart"></canvas>
+          </div>
+          <div class="mt-4 text-center small">
+            <span class="mr-2">
+              <i class="fas fa-circle text-primary"></i> Top Holdings
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Holdings Table -->
+  <div class="card shadow mb-4">
+    <div
+      class="card-header py-3 d-flex justify-content-between align-items-center"
+    >
+      <h6 class="m-0 font-weight-bold text-primary">Holdings Overview</h6>
+      <div>
+        <a href="{{ url_for('holdings_page') }}" class="btn btn-primary btn-sm">
+          <i class="fas fa-eye fa-sm"></i> View Details
+        </a>
+        <a href="{{ url_for('splits_page') }}" class="btn btn-info btn-sm">
+          <i class="fas fa-code-branch fa-sm"></i> Split Analysis
+        </a>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table
+          class="table table-bordered"
+          id="dataTable"
+          width="100%"
+          cellspacing="0"
+        >
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Quantity</th>
+              <th>Avg Cost</th>
+              <th>Current Price</th>
+              <th>Market Value</th>
+              <th>Unrealized P&L</th>
+              <th>XIRR (%)</th>
+            </tr>
+          </thead>
+          <tbody id="holdingsTableBody">
+            <tr>
+              <td colspan="7" class="text-center">
+                <div
+                  class="spinner-border spinner-border-sm text-primary"
+                  role="status"
+                ></div>
+                Loading holdings data...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %} {% block scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+  {% if loading %}
+  setTimeout(function() {
+      checkLoadingStatus();
+  }, 3000);
+
+  function checkLoadingStatus() {
+      fetch('/api/loading-status')
+          .then(response => response.json())
+          .then(data => {
+              if (data.loading_complete) {
+                  location.reload();
+              } else if (data.error) {
+                  location.reload();
+              } else {
+                  setTimeout(checkLoadingStatus, 5000);
+              }
+          })
+          .catch(() => {
+              setTimeout(checkLoadingStatus, 5000);
+          });
+  }
+  {% endif %}
+
+  // Functional refresh button
+  async function refreshPrices() {
+      const refreshBtn = document.getElementById('refreshBtn');
+      const refreshIcon = document.getElementById('refreshIcon');
+
+      // Disable button and show loading
+      refreshBtn.disabled = true;
+      refreshIcon.classList.add('fa-spin');
+      refreshBtn.innerHTML = '<i class="fas fa-sync-alt fa-sm text-white-50 fa-spin"></i> Refreshing...';
+
+      try {
+          const response = await fetch('/api/refresh-prices', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+              }
+          });
+
+          if (response.ok) {
+              // Reload the page to show updated data
+              location.reload();
+          } else {
+              throw new Error('Failed to refresh prices');
+          }
+      } catch (error) {
+          console.error('Error refreshing prices:', error);
+          alert('Failed to refresh prices. Please try again.');
+
+          // Reset button
+          refreshBtn.disabled = false;
+          refreshIcon.classList.remove('fa-spin');
+          refreshBtn.innerHTML = '<i class="fas fa-sync-alt fa-sm text-white-50"></i> Refresh Prices';
+      }
+  }
+
+  function changeChartCurrency(currency) {
+      loadPortfolioChart(currency);
+  }
+</script>
+{% endblock %}

@@ -1,8 +1,6 @@
-<!-- templates/dashboard.html -->
 {% extends "base.html" %} {% block title %}Dashboard - Portfolio Analyzer{%
 endblock %} {% block content %}
 <div class="container-fluid">
-  <!-- Loading State -->
   {% if loading %}
   <div class="row justify-content-center mt-5">
     <div class="col-md-6">
@@ -20,7 +18,6 @@ endblock %} {% block content %}
     </div>
   </div>
   {% elif error %}
-  <!-- Error State -->
   <div class="row justify-content-center mt-5">
     <div class="col-md-6">
       <div class="card shadow border-left-danger">
@@ -36,7 +33,6 @@ endblock %} {% block content %}
     </div>
   </div>
   {% else %}
-  <!-- Portfolio Header -->
   <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800">
       <i class="fas fa-chart-pie text-primary"></i> Portfolio Dashboard
@@ -53,9 +49,7 @@ endblock %} {% block content %}
     </div>
   </div>
 
-  <!-- Content Row - Summary Cards -->
   <div class="row">
-    <!-- Total Holdings Card -->
     <div class="col-xl-3 col-md-6 mb-4">
       <div class="card border-left-primary shadow h-100 py-2">
         <div class="card-body">
@@ -78,7 +72,6 @@ endblock %} {% block content %}
       </div>
     </div>
 
-    <!-- Portfolio Value (USD) Card -->
     <div class="col-xl-3 col-md-6 mb-4">
       <div class="card border-left-success shadow h-100 py-2">
         <div class="card-body">
@@ -101,7 +94,6 @@ endblock %} {% block content %}
       </div>
     </div>
 
-    <!-- Portfolio Value (SGD) Card -->
     <div class="col-xl-3 col-md-6 mb-4">
       <div class="card border-left-info shadow h-100 py-2">
         <div class="card-body">
@@ -124,7 +116,6 @@ endblock %} {% block content %}
       </div>
     </div>
 
-    <!-- Unrealized P&L Card -->
     <div class="col-xl-3 col-md-6 mb-4">
       <div class="card border-left-warning shadow h-100 py-2">
         <div class="card-body">
@@ -301,12 +292,10 @@ endblock %} {% block content %}
   }
   {% endif %}
 
-  // Functional refresh button
   async function refreshPrices() {
       const refreshBtn = document.getElementById('refreshBtn');
       const refreshIcon = document.getElementById('refreshIcon');
 
-      // Disable button and show loading
       refreshBtn.disabled = true;
       refreshIcon.classList.add('fa-spin');
       refreshBtn.innerHTML = '<i class="fas fa-sync-alt fa-sm text-white-50 fa-spin"></i> Refreshing...';
@@ -320,7 +309,6 @@ endblock %} {% block content %}
           });
 
           if (response.ok) {
-              // Reload the page to show updated data
               location.reload();
           } else {
               throw new Error('Failed to refresh prices');
@@ -329,7 +317,6 @@ endblock %} {% block content %}
           console.error('Error refreshing prices:', error);
           alert('Failed to refresh prices. Please try again.');
 
-          // Reset button
           refreshBtn.disabled = false;
           refreshIcon.classList.remove('fa-spin');
           refreshBtn.innerHTML = '<i class="fas fa-sync-alt fa-sm text-white-50"></i> Refresh Prices';

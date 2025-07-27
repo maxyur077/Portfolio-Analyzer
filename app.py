@@ -1,4 +1,3 @@
-# app.py
 from flask import (
     Flask,
     render_template,
@@ -28,7 +27,6 @@ os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 os.makedirs(app.config["DEMO_DATA_FOLDER"], exist_ok=True)
 logging.basicConfig(level=logging.INFO)
 
-# --- Task Management & Caching ---
 PORTFOLIO_CACHE = {}
 ANALYSIS_STATUS = {}
 
@@ -91,7 +89,7 @@ def upload_page():
         return redirect(url_for("loading_page"))
 
     uploaded_files = [f for f in os.listdir(user_path) if f.endswith(".csv")]
-    return render_template("upload.html", uploaded_files=uploaded_files)
+    return render_template("uploads.html", uploaded_files=uploaded_files)
 
 @app.route('/loading')
 def loading_page():
@@ -125,7 +123,6 @@ def splits_page():
     if not inject_data_status()['has_data']: return redirect(url_for('upload_page'))
     return render_template('splits.html')
 
-# --- Utility Routes ---
 @app.route("/download-demo-data")
 def download_demo_data():
     demo_file = "demo_trades.csv"
@@ -148,7 +145,6 @@ def clear_data():
     flash("Your uploaded data has been cleared.", "success")
     return redirect(url_for("upload_page"))
 
-# --- API Endpoints ---
 @app.route('/api/analysis-status')
 def api_analysis_status():
     user_id = session.get("user_id")
@@ -172,7 +168,6 @@ def api_splits_analysis():
     if not pm: return jsonify({'error': 'No data found'}), 404
     return jsonify(pm.get_splits_analysis())
 
-# --- THIS IS THE MISSING ROUTE ---
 @app.route('/api/holdings-detailed')
 def api_holdings_detailed():
     pm = get_portfolio_manager()

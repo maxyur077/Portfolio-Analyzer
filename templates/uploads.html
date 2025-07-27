@@ -83,9 +83,6 @@
             {% endfor %}
           </ul>
           <div class="d-grid gap-2 d-md-flex justify-content-md-center mt-3">
-            <a href="{{ url_for('dashboard') }}" class="btn btn-info"
-              >Go to Dashboard</a
-            >
             <form
               action="{{ url_for('clear_data') }}"
               method="post"

@@ -1,13 +1,10 @@
-// static/js/charts.js (Complete fixed version)
 let myAreaChart;
 let myPieChart;
 
-// Chart.js Configuration
 Chart.defaults.font.family =
   'Nunito,-apple-system,system-ui,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 Chart.defaults.color = "#858796";
 
-// Initialize all charts
 async function initializeCharts() {
   const isLoading = await checkDataLoading();
   if (!isLoading) {
@@ -17,7 +14,6 @@ async function initializeCharts() {
   }
 }
 
-// Check if data is still loading
 async function checkDataLoading() {
   try {
     const response = await fetch("/api/loading-status");
@@ -29,7 +25,6 @@ async function checkDataLoading() {
   }
 }
 
-// Portfolio Area Chart
 async function loadPortfolioChart(currency = "USD") {
   try {
     const response = await fetch(`/api/portfolio-value/${currency}`);
@@ -39,7 +34,7 @@ async function loadPortfolioChart(currency = "USD") {
     }
 
     const data = await response.json();
-    console.log("Portfolio chart data:", data); // Debug log
+    console.log("Portfolio chart data:", data);
 
     const ctx = document.getElementById("myAreaChart");
     if (!ctx) {
@@ -47,12 +42,10 @@ async function loadPortfolioChart(currency = "USD") {
       return;
     }
 
-    // Destroy existing chart
     if (myAreaChart) {
       myAreaChart.destroy();
     }
 
-    // Ensure we have data
     if (!data.dates || !data.values || data.dates.length === 0) {
       console.error("No chart data available");
       return;
@@ -164,7 +157,6 @@ async function loadPortfolioChart(currency = "USD") {
   }
 }
 
-// Holdings Pie Chart
 async function loadHoldingsPieChart() {
   try {
     const response = await fetch("/api/holdings");
@@ -174,7 +166,7 @@ async function loadHoldingsPieChart() {
     }
 
     const holdings = await response.json();
-    console.log("Holdings data:", holdings); // Debug log
+    console.log("Holdings data:", holdings);
 
     const ctx = document.getElementById("myPieChart");
     if (!ctx) {
@@ -195,7 +187,6 @@ async function loadHoldingsPieChart() {
     const values = topHoldings.map(([, data]) => data.market_value);
     const colors = ["#4e73df", "#1cc88a", "#36b9cc", "#f6c23e", "#e74a3b"];
 
-    // Destroy existing chart
     if (myPieChart) {
       myPieChart.destroy();
     }
@@ -247,16 +238,15 @@ async function loadHoldingsPieChart() {
   }
 }
 
-// Load holdings data for table
 async function loadHoldingsData() {
   try {
     const response = await fetch("/api/holdings");
     if (response.status === 202) {
-      return; // Still loading
+      return;
     }
 
     const holdings = await response.json();
-    console.log("Table holdings data:", holdings); // Debug log
+    console.log("Table holdings data:", holdings);
 
     const tbody = document.getElementById("holdingsTableBody");
     if (!tbody) return;
@@ -312,7 +302,6 @@ async function loadHoldingsData() {
   }
 }
 
-// Number formatting function
 function number_format(number, decimals, dec_point, thousands_sep) {
   number = (number + "").replace(",", "").replace(" ", "");
   var n = !isFinite(+number) ? 0 : +number,
@@ -335,13 +324,11 @@ function number_format(number, decimals, dec_point, thousands_sep) {
   return s.join(dec);
 }
 
-// Initialize on page load
 document.addEventListener("DOMContentLoaded", function () {
   console.log("DOM loaded, initializing charts...");
   initializeCharts();
 });
 
-// Add error handling for missing Chart.js
 if (typeof Chart === "undefined") {
   console.error("Chart.js not loaded!");
 }

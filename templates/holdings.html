@@ -7,10 +7,11 @@ Analyzer{% endblock %} {% block content %}
         <h1 class="h3 mb-0 text-gray-800">Holdings Details</h1>
         <div>
           <button
+            id="refreshBtn"
             class="btn btn-outline-primary btn-sm"
             onclick="refreshPrices()"
           >
-            <i class="fas fa-sync-alt"></i> Refresh
+            <i id="refreshIcon" class="fas fa-sync-alt"></i> Refresh
           </button>
         </div>
       </div>
@@ -82,7 +83,7 @@ Analyzer{% endblock %} {% block content %}
 </div>
 {% endblock %} {% block scripts %}
 <script>
-  // Load detailed holdings
+  // Fixed refresh prices function
   async function refreshPrices() {
     const refreshBtn = document.getElementById("refreshBtn");
     const refreshIcon = document.getElementById("refreshIcon");
@@ -91,7 +92,7 @@ Analyzer{% endblock %} {% block content %}
     refreshBtn.disabled = true;
     refreshIcon.classList.add("fa-spin");
     refreshBtn.innerHTML =
-      '<i class="fas fa-sync-alt fa-sm text-white-50 fa-spin"></i> Refreshing...';
+      '<i class="fas fa-sync-alt fa-spin"></i> Refreshing...';
 
     try {
       const response = await fetch("/api/refresh-prices", {
@@ -102,20 +103,29 @@ Analyzer{% endblock %} {% block content %}
       });
 
       if (response.ok) {
-        // Reload the page to show updated data
-        location.reload();
+        // Show success message briefly before reload
+        refreshBtn.innerHTML =
+          '<i class="fas fa-check text-success"></i> Updated!';
+        setTimeout(() => {
+          location.reload();
+        }, 1000);
       } else {
         throw new Error("Failed to refresh prices");
       }
     } catch (error) {
       console.error("Error refreshing prices:", error);
-      alert("Failed to refresh prices. Please try again.");
 
-      // Reset button
-      refreshBtn.disabled = false;
-      refreshIcon.classList.remove("fa-spin");
+      // Show error state
       refreshBtn.innerHTML =
-        '<i class="fas fa-sync-alt fa-sm text-white-50"></i> Refresh Prices';
+        '<i class="fas fa-exclamation-triangle text-danger"></i> Error';
+
+      // Reset button after 3 seconds
+      setTimeout(() => {
+        refreshBtn.disabled = false;
+        refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+      }, 3000);
+
+      alert("Failed to refresh prices. Please try again.");
     }
   }
 
@@ -261,7 +271,6 @@ Analyzer{% endblock %} {% block content %}
     }
   }
 
-  // Initialize page
   document.addEventListener("DOMContentLoaded", loadDetailedHoldings);
 </script>
 {% endblock %}

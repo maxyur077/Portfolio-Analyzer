@@ -13,14 +13,19 @@ import random
 
 class PortfolioManager:
     def __init__(self, data_loader):
-        self.data_loader = data_loader
+        """Initializes the PortfolioManager with a DataLoader instance."""
+        self.data_loader = data_loader  # Use the passed object
         self.price_fetcher = PriceFetcher()
         self.currency_converter = CurrencyConverter()
         self.split_adjuster = SplitAdjuster()
         self.df_trades = None
         self.holdings = {}
         self._load_and_process_data()
-    
+
+    # --- NO OTHER CHANGES ARE NEEDED IN THIS FILE ---
+    # (The rest of the file remains the same as the last correct version)
+
+
     def _load_and_process_data(self):
         """Load and process all trading data"""
         try:

@@ -12,6 +12,7 @@ token.json
 __pycache__/
 *.py[cod]
 *.pyo
+uploads/
 
 # Build outputs
 build/

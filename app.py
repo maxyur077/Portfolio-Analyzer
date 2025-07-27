@@ -1,171 +1,185 @@
+# app.py
+from flask import (
+    Flask,
+    render_template,
+    jsonify,
+    request,
+    session,
+    redirect,
+    url_for,
+    send_file,
+    flash,
+)
+import os
+import logging
+from werkzeug.utils import secure_filename
+import shutil
+import threading
 
-from flask import Flask, render_template, jsonify
-import pandas as pd
 from models.portfolio import PortfolioManager
 from utils.data_loader import DataLoader
-import logging
-import time
-import random
 
+# --- App Configuration ---
 app = Flask(__name__)
+app.secret_key = os.urandom(24)
+app.config["UPLOAD_FOLDER"] = "uploads"
+app.config["DEMO_DATA_FOLDER"] = "data"
+os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+os.makedirs(app.config["DEMO_DATA_FOLDER"], exist_ok=True)
 logging.basicConfig(level=logging.INFO)
 
+# --- Task Management & Caching ---
+PORTFOLIO_CACHE = {}
+ANALYSIS_STATUS = {}
 
-portfolio_manager = None
-data_loading_complete = False
-loading_error = None
+def get_user_upload_path():
+    """Returns the path for the current user's uploaded files."""
+    if "user_id" not in session:
+        session["user_id"] = os.urandom(8).hex()
+    user_folder = os.path.join(app.config["UPLOAD_FOLDER"], session["user_id"])
+    os.makedirs(user_folder, exist_ok=True)
+    return user_folder
 
-def initialize_portfolio_data():
-    """Initialize portfolio data in background"""
-    global portfolio_manager, data_loading_complete, loading_error
-    
+def run_analysis_for_user(user_id, user_path):
+    """The background task that runs the portfolio analysis."""
     try:
-        logging.info("Starting portfolio data initialization...")
-        time.sleep(random.uniform(1, 2))  
-        
-        data_loader = DataLoader()
-        portfolio_manager = PortfolioManager(data_loader)
-        
-        data_loading_complete = True
-        logging.info("Portfolio data initialization completed successfully")
-        
+        data_loader = DataLoader(data_path=user_path)
+        manager = PortfolioManager(data_loader=data_loader)
+        PORTFOLIO_CACHE[user_id] = manager
+        ANALYSIS_STATUS[user_id] = {'status': 'complete'}
+        logging.info(f"Analysis complete for user {user_id}")
     except Exception as e:
-        loading_error = str(e)
-        logging.error(f"Error initializing portfolio data: {e}")
+        logging.error(f"Analysis failed for user {user_id}: {e}")
+        ANALYSIS_STATUS[user_id] = {'status': 'error', 'message': str(e)}
 
+def get_portfolio_manager():
+    """Gets a completed PortfolioManager instance for the current user."""
+    user_id = session.get("user_id")
+    return PORTFOLIO_CACHE.get(user_id)
 
-import threading
-thread = threading.Thread(target=initialize_portfolio_data)
-thread.daemon = True
-thread.start()
+@app.context_processor
+def inject_data_status():
+    """Makes 'has_data' available to all templates for conditional rendering."""
+    has_data = get_portfolio_manager() is not None
+    return dict(has_data=has_data)
 
-@app.route('/')
-def dashboard():
-    """Main dashboard with portfolio overview"""
-    if not data_loading_complete:
-        return render_template('dashboard.html', 
-                             loading=True, 
-                             error=loading_error,
-                             summary={'total_holdings': 0, 'total_value_usd': 0, 'total_value_sgd': 0, 'total_unrealized_pnl': 0, 'top_holdings': []})
-    
-    try:
-        portfolio_summary = portfolio_manager.get_portfolio_summary()
-        daily_values = portfolio_manager.get_daily_portfolio_values()
+# --- Core Routes ---
+@app.route("/", methods=["GET", "POST"])
+def upload_page():
+    user_path = get_user_upload_path()
+    if request.method == "POST":
+        if "files" not in request.files:
+            flash("No file part in the request.", "danger")
+            return redirect(request.url)
+        files = request.files.getlist("files")
+        if not files or files[0].filename == "":
+            flash("No files selected for uploading.", "warning")
+            return redirect(request.url)
         
-        return render_template('dashboard.html', 
-                             loading=False,
-                             error=None,
-                             summary=portfolio_summary,
-                             daily_values=daily_values)
-    except Exception as e:
-        logging.error(f"Error in dashboard: {e}")
-        return render_template('dashboard.html', 
-                             loading=False, 
-                             error=str(e),
-                             summary={'total_holdings': 0, 'total_value_usd': 0, 'total_value_sgd': 0, 'total_unrealized_pnl': 0, 'top_holdings': []})
-
-@app.route('/holdings')
-def holdings_page():
-    """Renders the detailed holdings page"""
-    return render_template('holdings.html', loading=not data_loading_complete, error=loading_error)
-
-@app.route('/splits')
-def splits_page():
-    """Renders the split analysis page"""
-    return render_template('splits.html', loading=not data_loading_complete, error=loading_error)
-
-
-@app.route('/api/loading-status')
-def api_loading_status():
-    """Check if data loading is complete"""
-    return jsonify({
-        'loading_complete': data_loading_complete,
-        'error': loading_error
-    })
-
-@app.route('/api/holdings')
-def api_holdings():
-    """API endpoint for holdings data"""
-    if not data_loading_complete:
-        return jsonify({'error': 'Data still loading', 'loading': True}), 202
-    
-    try:
-        holdings = portfolio_manager.get_holdings_with_xirr()
-        return jsonify(holdings)
-    except Exception as e:
-        logging.error(f"Error getting holdings: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/portfolio-value/<currency>')
-def api_portfolio_value(currency):
-    """API endpoint for portfolio value in specific currency"""
-    if not data_loading_complete:
-        return jsonify({'error': 'Data still loading', 'loading': True}), 202
-    
-    try:
-        values = portfolio_manager.get_portfolio_value_history(currency)
-        return jsonify(values)
-    except Exception as e:
-        logging.error(f"Error getting portfolio value: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/splits-analysis')
-def api_splits_analysis():
-    """API endpoint for split analysis data"""
-    if not data_loading_complete:
-        return jsonify({'error': 'Data still loading', 'loading': True}), 202
-    
-    try:
-        splits_data = portfolio_manager.get_splits_analysis()
-        return jsonify(splits_data)
-    except Exception as e:
-        logging.error(f"Error getting splits analysis: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/holdings-detailed')
-def api_holdings_detailed():
-    """API endpoint for detailed holdings data"""
-    if not data_loading_complete:
-        return jsonify({'error': 'Data still loading', 'loading': True}), 202
-    
-    try:
-        holdings = portfolio_manager.get_holdings_with_xirr()
-        total_value = sum(h['market_value'] for h in holdings.values())
+        if os.path.exists(user_path): shutil.rmtree(user_path)
+        os.makedirs(user_path)
         
-        return jsonify({
-            'holdings': holdings,
-            'total_portfolio_value': total_value
-        })
-    except Exception as e:
-        logging.error(f"Error getting detailed holdings: {e}")
-        return jsonify({'error': str(e)}), 500
+        user_id = session.get("user_id")
+        if user_id in PORTFOLIO_CACHE: del PORTFOLIO_CACHE[user_id]
+        if user_id in ANALYSIS_STATUS: del ANALYSIS_STATUS[user_id]
+            
+        for file in files:
+            if file and file.filename.endswith(".csv"):
+                filename = secure_filename(file.filename)
+                file.save(os.path.join(user_path, filename))
+        
+        return redirect(url_for("loading_page"))
 
-@app.route('/api/holding-detail/<symbol>')
-def api_holding_detail(symbol):
-    if not data_loading_complete:
-        return jsonify({'loading': True}), 202
-    data = portfolio_manager.get_holding_details(symbol)
-    return jsonify(data)          
-@app.route('/api/refresh-prices', methods=['POST'])
-def api_refresh_prices():
-    """API endpoint to refresh all portfolio prices"""
-    if not data_loading_complete:
-        return jsonify({'error': 'Data still loading'}), 202
+    uploaded_files = [f for f in os.listdir(user_path) if f.endswith(".csv")]
+    return render_template("upload.html", uploaded_files=uploaded_files)
+
+@app.route('/loading')
+def loading_page():
+    user_id = session.get("user_id")
+    user_path = get_user_upload_path()
     
-    try:
-        
-        import threading
-        def refresh_in_background():
-            portfolio_manager.refresh_prices()
-        
-        thread = threading.Thread(target=refresh_in_background)
+    if user_id not in ANALYSIS_STATUS:
+        ANALYSIS_STATUS[user_id] = {'status': 'running'}
+        thread = threading.Thread(target=run_analysis_for_user, args=(user_id, user_path))
         thread.daemon = True
         thread.start()
         
-        return jsonify({'success': True, 'message': 'Price refresh started'})
-    except Exception as e:
-        logging.error(f"Error refreshing prices: {e}")
-        return jsonify({'error': str(e)}), 500
+    return render_template('loading.html')
 
-if __name__ == '__main__':
+@app.route("/dashboard")
+def dashboard():
+    portfolio_manager = get_portfolio_manager()
+    if portfolio_manager is None:
+        flash("Your data has not been processed yet. Please upload files first.", "info")
+        return redirect(url_for("upload_page"))
+    summary = portfolio_manager.get_portfolio_summary()
+    return render_template("dashboard.html", summary=summary)
+
+@app.route('/holdings')
+def holdings_page():
+    if not inject_data_status()['has_data']: return redirect(url_for('upload_page'))
+    return render_template('holdings.html')
+
+@app.route('/splits')
+def splits_page():
+    if not inject_data_status()['has_data']: return redirect(url_for('upload_page'))
+    return render_template('splits.html')
+
+# --- Utility Routes ---
+@app.route("/download-demo-data")
+def download_demo_data():
+    demo_file = "demo_trades.csv"
+    demo_file_path = os.path.join(app.config["DEMO_DATA_FOLDER"], demo_file)
+    if not os.path.exists(demo_file_path):
+        flash("Demo file is not available.", "warning")
+        return redirect(url_for('upload_page'))
+    return send_file(demo_file_path, as_attachment=True)
+
+@app.route("/clear-data", methods=["POST"])
+def clear_data():
+    user_path = get_user_upload_path()
+    if os.path.exists(user_path):
+        shutil.rmtree(user_path)
+    
+    user_id = session.get("user_id")
+    if user_id in PORTFOLIO_CACHE: del PORTFOLIO_CACHE[user_id]
+    if user_id in ANALYSIS_STATUS: del ANALYSIS_STATUS[user_id]
+        
+    flash("Your uploaded data has been cleared.", "success")
+    return redirect(url_for("upload_page"))
+
+# --- API Endpoints ---
+@app.route('/api/analysis-status')
+def api_analysis_status():
+    user_id = session.get("user_id")
+    return jsonify(ANALYSIS_STATUS.get(user_id, {'status': 'pending'}))
+
+@app.route('/api/portfolio-value/<currency>')
+def api_portfolio_value(currency):
+    pm = get_portfolio_manager()
+    if not pm: return jsonify({'error': 'No data found'}), 404
+    return jsonify(pm.get_portfolio_value_history(currency))
+
+@app.route('/api/holdings')
+def api_holdings():
+    pm = get_portfolio_manager()
+    if not pm: return jsonify({'error': 'No data found'}), 404
+    return jsonify(pm.get_holdings_with_xirr())
+    
+@app.route('/api/splits-analysis')
+def api_splits_analysis():
+    pm = get_portfolio_manager()
+    if not pm: return jsonify({'error': 'No data found'}), 404
+    return jsonify(pm.get_splits_analysis())
+
+# --- THIS IS THE MISSING ROUTE ---
+@app.route('/api/holdings-detailed')
+def api_holdings_detailed():
+    pm = get_portfolio_manager()
+    if not pm: return jsonify({'holdings': {}, 'total_portfolio_value': 0}), 404
+    
+    holdings_data = pm.get_detailed_holdings()
+    return jsonify(holdings_data)
+
+if __name__ == "__main__":
     app.run(debug=True)

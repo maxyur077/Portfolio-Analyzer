@@ -1,0 +1,105 @@
+<!-- templates/upload.html -->
+{% extends "base.html" %} {% block title %}Upload Portfolio Data{% endblock %}
+{% block content %}
+<div class="container mt-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <!-- Flash Messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %} {% if
+      messages %} {% for category, message in messages %}
+      <div
+        class="alert alert-{{ category }} alert-dismissible fade show"
+        role="alert"
+      >
+        {{ message }}
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="alert"
+          aria-label="Close"
+        ></button>
+      </div>
+      {% endfor %} {% endif %} {% endwith %}
+
+      <div class="card shadow-lg border-0">
+        <div class="card-header bg-primary text-white text-center">
+          <h4 class="mb-0">Upload Your Portfolio Files</h4>
+        </div>
+        <div class="card-body p-4">
+          <p class="text-muted text-center mb-4">
+            Upload your trade history CSV files to begin the analysis. You can
+            upload multiple files at once.
+          </p>
+
+          <!-- Upload Form -->
+          <form
+            action="{{ url_for('upload_page') }}"
+            method="post"
+            enctype="multipart/form-data"
+            class="mb-4"
+          >
+            <div class="input-group">
+              <input
+                type="file"
+                class="form-control"
+                name="files"
+                multiple
+                required
+              />
+              <button class="btn btn-primary" type="submit">
+                <i class="fas fa-upload me-2"></i>Upload & Analyze
+              </button>
+            </div>
+            <div class="form-text">Supports .csv files only.</div>
+          </form>
+
+          <!-- Demo Data Download -->
+          <div class="text-center mb-4">
+            <a
+              href="{{ url_for('download_demo_data') }}"
+              class="btn btn-success"
+            >
+              <i class="fas fa-download me-2"></i>Download Demo File
+            </a>
+            <p class="form-text mt-2">
+              Not sure about the format? Download a sample CSV file.
+            </p>
+          </div>
+
+          <!-- Uploaded Files List -->
+          {% if uploaded_files %}
+          <hr />
+          <h5 class="text-center mb-3">Your Current Data</h5>
+          <ul class="list-group list-group-flush">
+            {% for file in uploaded_files %}
+            <li
+              class="list-group-item d-flex justify-content-between align-items-center"
+            >
+              <span
+                ><i class="fas fa-file-csv text-success me-2"></i>{{ file
+                }}</span
+              >
+            </li>
+            {% endfor %}
+          </ul>
+          <div class="d-grid gap-2 d-md-flex justify-content-md-center mt-3">
+            <a href="{{ url_for('dashboard') }}" class="btn btn-info"
+              >Go to Dashboard</a
+            >
+            <form
+              action="{{ url_for('clear_data') }}"
+              method="post"
+              onsubmit="return confirm('Are you sure you want to delete all your uploaded data?');"
+            >
+              <button type="submit" class="btn btn-danger btn-sm">
+                <i class="fas fa-trash-alt me-2"></i>Clear All Data
+              </button>
+            </form>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

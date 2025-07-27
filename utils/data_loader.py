@@ -1,50 +1,44 @@
+# utils/data_loader.py
 import pandas as pd
+import os
 import glob
 import logging
-from datetime import datetime
 
 class DataLoader:
-    def __init__(self, data_path='data/'):
+    def __init__(self, data_path):
+        if not os.path.isdir(data_path):
+            raise FileNotFoundError(f"Data directory not found: {data_path}")
         self.data_path = data_path
-        
+        logging.info(f"DataLoader initialized with path: {self.data_path}")
+
     def load_all_trades(self):
-        """Load and merge all CSV trade files"""
-        csv_files = glob.glob(f"{self.data_path}Stock_trading_*.csv")
-        
+        csv_files = glob.glob(os.path.join(self.data_path, "*.csv"))
         if not csv_files:
-            raise FileNotFoundError("No trading CSV files found")
-        
+            logging.warning(f"No CSV files found in {self.data_path}")
+            return pd.DataFrame()
+
         all_trades = []
-        
         for file in csv_files:
             try:
                 df = pd.read_csv(file)
                 
-                df = df[df['DataDiscriminator'] == 'Order']
+                # --- ROBUST DATA CLEANING TO FIX THE ERROR ---
+                # Convert key columns to numeric, coercing errors to NaN (Not a Number)
+                df['Date/Time'] = pd.to_datetime(df['Date/Time'], errors='coerce')
+                df['Quantity'] = pd.to_numeric(df['Quantity'], errors='coerce')
+                df['T. Price'] = pd.to_numeric(df['T. Price'], errors='coerce')
+
+                # Drop rows where essential data is missing after coercion
+                df.dropna(subset=['Date/Time', 'Quantity', 'T. Price', 'Symbol'], inplace=True)
+
                 all_trades.append(df)
-                logging.info(f"Loaded {len(df)} trades from {file}")
-                
             except Exception as e:
-                logging.error(f"Error loading {file}: {e}")
+                logging.error(f"Error reading or processing {file}: {e}")
                 continue
         
-        if not all_trades:
-            raise ValueError("No valid trade data found")
-        
-        
-        combined_df = pd.concat(all_trades, ignore_index=True)
-        
-        
-        combined_df['Date/Time'] = pd.to_datetime(combined_df['Date/Time'])
-        
-        
-        numeric_columns = ['Quantity', 'T. Price', 'C. Price', 'Proceeds', 'Comm/Fee']
-        for col in numeric_columns:
-            combined_df[col] = pd.to_numeric(combined_df[col].astype(str).str.replace(',', ''), 
-                                           errors='coerce')
-        
-        
-        combined_df['adjusted_quantity'] = combined_df['Quantity']
-        combined_df['adjusted_price'] = combined_df['T. Price']
-        
-        return combined_df.sort_values('Date/Time')
+        if not all_trades: return pd.DataFrame()
+
+        df_combined = pd.concat(all_trades, ignore_index=True)
+        df_combined['adjusted_quantity'] = df_combined['Quantity']
+        df_combined['adjusted_price'] = df_combined['T. Price']
+        return df_combined.sort_values(by="Date/Time").reset_index(drop=True)

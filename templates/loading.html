@@ -1,0 +1,47 @@
+{% extends "base.html" %} {% block title %}Analyzing Your Data{% endblock %} {%
+block content %}
+<div class="container text-center" style="margin-top: 20vh">
+  <div class="row justify-content-center">
+    <div class="col-lg-6">
+      <div class="card shadow-lg border-0">
+        <div class="card-body p-5">
+          <div
+            class="spinner-border text-primary"
+            style="width: 3rem; height: 3rem"
+            role="status"
+          >
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <h4 class="mt-4">Analyzing Your Portfolio</h4>
+          <p class="text-muted">
+            Please wait a moment while we process your trade history...
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  function checkStatus() {
+    fetch("/api/analysis-status")
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.status === "complete") {
+          window.location.href = "{{ url_for('dashboard') }}";
+        } else if (data.status === "error") {
+          alert("An error occurred during analysis: " + data.message);
+          window.location.href = "{{ url_for('upload_page') }}";
+        } else {
+          setTimeout(checkStatus, 2000);
+        }
+      })
+      .catch((error) => {
+        console.error("Error checking status:", error);
+        setTimeout(checkStatus, 5000);
+      });
+  }
+
+  document.addEventListener("DOMContentLoaded", checkStatus);
+</script>
+{% endblock %}

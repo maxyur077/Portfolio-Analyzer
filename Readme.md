@@ -3,7 +3,10 @@
 A modern, session-based web application built with Flask and JavaScript that allows users to upload their trade history and receive a comprehensive, interactive analysis of their investment portfolio.
 
 
-https://github.com/user-attachments/assets/50b3e37f-a313-4358-a66d-0065fdafe937
+
+https://github.com/user-attachments/assets/17a7cad8-4919-43df-9f52-7b57d3be3eda
+
+
 
 
 

@@ -17,8 +17,6 @@ import threading
 
 from models.portfolio import PortfolioManager
 from utils.data_loader import DataLoader
-
-# --- App Configuration ---
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 app.config["UPLOAD_FOLDER"] = "uploads"
@@ -122,10 +120,45 @@ def holdings_page():
 def splits_page():
     if not inject_data_status()['has_data']: return redirect(url_for('upload_page'))
     return render_template('splits.html')
+# Update the API endpoints in app.py
+@app.route('/api/portfolio-news')
+def api_portfolio_news():
+    """Get news for all portfolio holdings"""
+    try:
+        pm = get_portfolio_manager()
+        if not pm: 
+            logging.warning("Portfolio manager not found for portfolio news request")
+            return jsonify({'error': 'No portfolio data found. Please upload data first.'}), 404
+        
+        news = pm.get_portfolio_news()
+        return jsonify(news)
+    except Exception as e:
+        logging.error(f"Error getting portfolio news: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/market-news')
+def api_market_news():
+    """Get general market news"""
+    try:
+        pm = get_portfolio_manager()
+        if not pm:
+            logging.warning("Portfolio manager not found for market news request")
+            # For market news, we can still return news even without portfolio data
+            # Create a temporary news fetcher
+            from utils.news_fetcher import NewsFetcher
+            temp_fetcher = NewsFetcher()
+            news = temp_fetcher.get_market_news()
+            return jsonify(news)
+        
+        news = pm.get_market_news()
+        return jsonify(news)
+    except Exception as e:
+        logging.error(f"Error getting market news: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route("/download-demo-data")
 def download_demo_data():
-    demo_file = "demo_trades.csv"
+    demo_file = "Stock_trading_2023.csv"
     demo_file_path = os.path.join(app.config["DEMO_DATA_FOLDER"], demo_file)
     if not os.path.exists(demo_file_path):
         flash("Demo file is not available.", "warning")
@@ -175,6 +208,16 @@ def api_holdings_detailed():
     
     holdings_data = pm.get_detailed_holdings()
     return jsonify(holdings_data)
+# Add to app.py
+
+
+
+
+@app.route('/news')
+def news_page():
+    """Renders the dedicated news page"""
+    if not inject_data_status()['has_data']: return redirect(url_for('upload_page'))
+    return render_template('news.html')
 
 if __name__ == "__main__":
     app.run(debug=True)

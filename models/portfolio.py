@@ -1,8 +1,9 @@
-
+# models/portfolio.py
 import pandas as pd
 import numpy as np
 import time
 from datetime import datetime, timedelta
+from utils.news_fetcher import NewsFetcher
 from utils.xirr_calculator import calculate_xirr
 from utils.price_fetcher import PriceFetcher
 from models.currency import CurrencyConverter
@@ -14,34 +15,31 @@ import random
 class PortfolioManager:
     def __init__(self, data_loader):
         """Initializes the PortfolioManager with a DataLoader instance."""
-        self.data_loader = data_loader  # Use the passed object
+        self.data_loader = data_loader
         self.price_fetcher = PriceFetcher()
         self.currency_converter = CurrencyConverter()
         self.split_adjuster = SplitAdjuster()
+        self.news_fetcher = NewsFetcher()  
         self.df_trades = None
         self.holdings = {}
         self._load_and_process_data()
 
-    # --- NO OTHER CHANGES ARE NEEDED IN THIS FILE ---
-    # (The rest of the file remains the same as the last correct version)
-
-
     def _load_and_process_data(self):
         """Load and process all trading data"""
         try:
-            
+            # Load trades from all CSV files
             self.df_trades = self.data_loader.load_all_trades()
             
-            
+            # Detect and adjust for stock splits
             self.df_trades = self.split_adjuster.adjust_for_splits(self.df_trades)
             
-            
+            # Calculate adjusted cashflows
             self.df_trades['adjusted_cashflow'] = (
                 self.df_trades['adjusted_quantity'] * 
                 self.df_trades['adjusted_price']
             )
             
-            
+            # Generate holdings summary with batching to avoid rate limits
             self._calculate_holdings_with_batching()
             
             logging.info(f"Processed {len(self.df_trades)} trades across {len(self.holdings)} holdings")
@@ -49,11 +47,31 @@ class PortfolioManager:
         except Exception as e:
             logging.error(f"Error processing data: {e}")
             raise
-    
+        
+    def get_portfolio_news(self):
+        try:
+            top_symbols = sorted(
+            self.holdings.items(), 
+            key=lambda x: x[1]['market_value'], 
+            reverse=True
+            )[:10]  
+            symbols = [symbol for symbol, _ in top_symbols]
+            return self.news_fetcher.get_portfolio_news(symbols)
+        except Exception as e:
+            logging.error(f"Error getting portfolio news: {e}")
+            return {}
+    def get_market_news(self):
+        try:
+            return self.news_fetcher.get_general_market_news()
+        except Exception as e:
+            logging.error(f"Error getting market news: {e}")
+            return []
+
+
     def _calculate_holdings_with_batching(self):
-        """Calculate current holdings from trade data with batched API calls"""
+        """Calculate current holdings with proper split adjustment validation"""
         symbols = self.df_trades['Symbol'].unique()
-        batch_size = 5  
+        batch_size = 5
         
         logging.info(f"Processing {len(symbols)} symbols in batches of {batch_size}")
         
@@ -65,20 +83,21 @@ class PortfolioManager:
                 try:
                     symbol_trades = self.df_trades[self.df_trades['Symbol'] == symbol]
                     
-                    
-                    buy_quantity = symbol_trades[symbol_trades['Quantity'] > 0]['Quantity'].sum()
-                    sell_quantity = abs(symbol_trades[symbol_trades['Quantity'] < 0]['Quantity'].sum())
+                    # IMPORTANT: Use adjusted quantities, not original quantities
+                    buy_quantity = symbol_trades[symbol_trades['adjusted_quantity'] > 0]['adjusted_quantity'].sum()
+                    sell_quantity = abs(symbol_trades[symbol_trades['adjusted_quantity'] < 0]['adjusted_quantity'].sum())
                     net_quantity = buy_quantity - sell_quantity
                     
-                    if net_quantity > 0:  
-                        
+                    if net_quantity > 0:
                         latest_price = self.price_fetcher.get_latest_price_safe(symbol)
                         
-                        
-                        buy_trades = symbol_trades[symbol_trades['Quantity'] > 0]
-                        total_cost = buy_trades['adjusted_cashflow'].sum()
+                        # Calculate average cost using adjusted values
+                        buy_trades = symbol_trades[symbol_trades['adjusted_quantity'] > 0]
+                        total_cost = (buy_trades['adjusted_quantity'] * buy_trades['adjusted_price']).sum()
                         avg_cost = total_cost / buy_quantity if buy_quantity > 0 else 0
                         
+                        # Check if splits were applied
+                        splits_applied = symbol_trades['split_adjusted'].any() if 'split_adjusted' in symbol_trades.columns else False
                         
                         self.holdings[symbol] = {
                             'quantity': net_quantity,
@@ -86,20 +105,23 @@ class PortfolioManager:
                             'current_price': latest_price,
                             'market_value': net_quantity * latest_price,
                             'unrealized_pnl': (latest_price - avg_cost) * net_quantity,
-                            'currency': symbol_trades['Currency'].iloc[0]
+                            'currency': symbol_trades['Currency'].iloc[0],
+                            'splits_applied': splits_applied
                         }
                         
-                        logging.info(f"✓ {symbol}: {net_quantity:.2f} shares @ ${latest_price:.2f}")
-                        
+                        log_msg = f"✓ {symbol}: {net_quantity:.2f} shares @ ${latest_price:.2f}"
+                        if splits_applied:
+                            log_msg += " (split-adjusted)"
+                        logging.info(log_msg)
+                            
                 except Exception as e:
                     logging.error(f"Error processing {symbol}: {e}")
                     continue
             
-            
             if i + batch_size < len(symbols):
                 logging.info("Waiting 3 seconds before next batch...")
                 time.sleep(3)
-    
+
     def _calculate_holdings(self):
         """Legacy method - kept for backward compatibility"""
         self._calculate_holdings_with_batching()
@@ -115,6 +137,8 @@ class PortfolioManager:
             return int(obj)
         if isinstance(obj, (np.floating, np.float64, np.float32)):
             return float(obj)
+        if isinstance(obj, (np.bool_, np.bool8)):  # Handle numpy booleans
+            return bool(obj)
         if isinstance(obj, (pd.Timestamp, )):
             return obj.isoformat()
         if pd.isna(obj):
@@ -133,17 +157,17 @@ class PortfolioManager:
             }
         
         try:
-            
+            # Calculate total values by currency
             total_value_usd = sum(h['market_value'] for h in self.holdings.values() 
                                  if h['currency'] == 'USD')
             total_value_sgd = sum(h['market_value'] for h in self.holdings.values() 
                                  if h['currency'] == 'SGD')
             
-            
+            # Convert SGD to USD equivalent
             sgd_to_usd = self.currency_converter.convert(total_value_sgd, 'SGD', 'USD') or 0
             total_value_usd_equivalent = total_value_usd + sgd_to_usd
             
-            
+            # Convert USD equivalent to SGD
             usd_to_sgd = self.currency_converter.convert(total_value_usd_equivalent, 'USD', 'SGD') or 0
             
             return {
@@ -172,28 +196,28 @@ class PortfolioManager:
             try:
                 symbol_trades = self.df_trades[self.df_trades['Symbol'] == symbol]
                 
-                
+                # Prepare cashflow data for XIRR calculation
                 cashflows = []
                 dates = []
                 
                 for _, trade in symbol_trades.iterrows():
-                    
-                    
-                    if trade['Quantity'] > 0:  
+                    # For buy orders: negative cashflow (money going out)
+                    # For sell orders: positive cashflow (money coming in)
+                    if trade['Quantity'] > 0:  # Buy
                         cashflows.append(-abs(float(trade['adjusted_cashflow'])))
-                    else:  
+                    else:  # Sell
                         cashflows.append(abs(float(trade['adjusted_cashflow'])))
                     
                     dates.append(pd.to_datetime(trade['Date/Time']).date())
                 
-                
+                # Add current market value as final positive cashflow
                 cashflows.append(float(holding['market_value']))
                 dates.append(datetime.now().date())
                 
-                
+                # Calculate XIRR
                 xirr = calculate_xirr(cashflows, dates)
                 
-                
+                # Create holding data with proper type conversion - FIX THE BOOLEAN ISSUE
                 holding_data = {
                     'quantity': float(holding['quantity']),
                     'avg_cost': float(holding['avg_cost']),
@@ -202,14 +226,15 @@ class PortfolioManager:
                     'unrealized_pnl': float(holding['unrealized_pnl']),
                     'currency': str(holding['currency']),
                     'xirr': float(xirr) if xirr is not None else None,
-                    'xirr_percentage': float(xirr * 100) if xirr is not None else None
+                    'xirr_percentage': float(xirr * 100) if xirr is not None else None,
+                    'splits_applied': bool(holding.get('splits_applied', False))  # FIX: Convert to native Python bool
                 }
                 
                 holdings_with_xirr[symbol] = holding_data
                 
             except Exception as e:
                 logging.error(f"Error calculating XIRR for {symbol}: {e}")
-                
+                # Return holding data without XIRR
                 holding_data = {
                     'quantity': float(holding['quantity']),
                     'avg_cost': float(holding['avg_cost']),
@@ -218,12 +243,13 @@ class PortfolioManager:
                     'unrealized_pnl': float(holding['unrealized_pnl']),
                     'currency': str(holding['currency']),
                     'xirr': None,
-                    'xirr_percentage': None
+                    'xirr_percentage': None,
+                    'splits_applied': bool(holding.get('splits_applied', False))  # FIX: Convert to native Python bool
                 }
                 holdings_with_xirr[symbol] = holding_data
         
         return holdings_with_xirr
-    
+
     def get_daily_portfolio_values(self, days_back=90):
         """Get historical daily portfolio values with realistic variation"""
         try:
@@ -232,9 +258,9 @@ class PortfolioManager:
             dates = pd.date_range(start=start_date, end=end_date, freq='D')
             current_value = sum(h['market_value'] for h in self.holdings.values())
             
-            
+            # Create more realistic historical values with some variation
             values = []
-            base_value = current_value * 0.9  
+            base_value = current_value * 0.9  # Start 10% lower
             
             for i, date in enumerate(dates):
                 progress = i / len(dates)
@@ -243,7 +269,7 @@ class PortfolioManager:
                 daily_value = trend_value * (1 + volatility)
                 values.append(max(daily_value, base_value * 0.8))
             
-            
+            # Ensure the last value is close to current value
             values[-1] = current_value
             
             return {
@@ -261,7 +287,7 @@ class PortfolioManager:
             daily_values = self.get_daily_portfolio_values()
             
             if currency != 'USD':
-                
+                # Convert values to requested currency
                 converted_values = []
                 for value in daily_values['values']:
                     converted = self.currency_converter.convert(value, 'USD', currency)
@@ -280,15 +306,15 @@ class PortfolioManager:
         
         for symbol in self.holdings.keys():
             try:
-                
+                # Clear cache for this symbol
                 cache_key = (symbol, 'latest_price')
                 if cache_key in self.price_fetcher._cache:
                     del self.price_fetcher._cache[cache_key]
                 
-                
+                # Get fresh price
                 new_price = self.price_fetcher.get_latest_price_safe(symbol)
                 
-                
+                # Update holding
                 self.holdings[symbol]['current_price'] = new_price
                 self.holdings[symbol]['market_value'] = (
                     self.holdings[symbol]['quantity'] * new_price
@@ -299,7 +325,7 @@ class PortfolioManager:
                 )
                 
                 logging.info(f"Updated {symbol}: ${new_price:.2f}")
-                time.sleep(1)  
+                time.sleep(1)  # Rate limiting
                 
             except Exception as e:
                 logging.error(f"Error refreshing price for {symbol}: {e}")
@@ -329,10 +355,10 @@ class PortfolioManager:
         try:
             splits_detected = []
             
-            
+            # Analyze each symbol for splits
             for symbol in self.df_trades['Symbol'].unique():
                 try:
-                    
+                    # Skip special tickers that might cause issues
                     if not self.price_fetcher.is_valid_ticker(symbol):
                         logging.info(f"Skipping invalid ticker: {symbol}")
                         continue
@@ -340,16 +366,16 @@ class PortfolioManager:
                     import yfinance as yf
                     ticker = yf.Ticker(symbol)
                     
-                    
+                    # Use a more robust approach to get splits
                     splits = ticker.splits
                     
                     if splits is None or splits.empty:
                         continue
                     
-                    
+                    # Get date range for this symbol's trades
                     symbol_trades = self.df_trades[self.df_trades['Symbol'] == symbol]
                     
-                    
+                    # Convert trade dates to timezone-naive
                     trade_dates = pd.to_datetime(symbol_trades['Date/Time'])
                     if hasattr(trade_dates.dtype, 'tz') and trade_dates.dt.tz is not None:
                         trade_dates = trade_dates.dt.tz_localize(None)
@@ -357,10 +383,10 @@ class PortfolioManager:
                     first_date = trade_dates.min().normalize()
                     last_date = trade_dates.max().normalize()
                     
-                    
+                    # Process each split
                     for split_date, ratio in splits.items():
                         try:
-                            
+                            # Convert split_date to timezone-naive
                             if hasattr(split_date, 'tz_localize'):
                                 if split_date.tz is not None:
                                     split_date_naive = split_date.tz_localize(None)
@@ -371,24 +397,24 @@ class PortfolioManager:
                             
                             split_date_naive = split_date_naive.normalize()
                             
-                            
+                            # Check if split date is within our trading range
                             if first_date <= split_date_naive <= last_date:
-                                
+                                # Count affected trades
                                 pre_split_mask = pd.to_datetime(symbol_trades['Date/Time']).dt.normalize() < split_date_naive
                                 pre_split_trades = symbol_trades[pre_split_mask]
                                 
-                                
+                                # Get price before and after split
                                 post_split_mask = pd.to_datetime(symbol_trades['Date/Time']).dt.normalize() >= split_date_naive
                                 post_split_trades = symbol_trades[post_split_mask]
                                 
                                 price_before = float(pre_split_trades['T. Price'].iloc[-1]) if not pre_split_trades.empty else 0.0
                                 price_after = float(post_split_trades['T. Price'].iloc[0]) if not post_split_trades.empty else 0.0
                                 
-                                
+                                # Estimate price after split if not available
                                 if price_after == 0.0 and price_before > 0.0:
                                     price_after = price_before / float(ratio)
                                 
-                                
+                                # Calculate expected price after split for validation
                                 expected_after_price = price_before / float(ratio) if price_before > 0 else 0.0
                                 
                                 splits_detected.append({
@@ -418,10 +444,10 @@ class PortfolioManager:
             
             total_trades_adjusted = sum(split['trades_affected'] for split in splits_detected)
             
-            
+            # Sort splits by date (most recent first)
             splits_detected.sort(key=lambda x: x['date'], reverse=True)
             
-            
+            # Prepare chart data
             chart_data = {
                 'symbols': [split['symbol'] for split in splits_detected],
                 'before_prices': [split['price_before'] for split in splits_detected],
@@ -468,7 +494,7 @@ class PortfolioManager:
     def calculate_historical_portfolio_values(self, start_date, end_date):
         """Calculate actual historical portfolio values (enhanced version)"""
         try:
-            
+            # Create date range
             dates = pd.date_range(start=start_date, end=end_date, freq='D')
             historical_values = []
             
@@ -476,20 +502,21 @@ class PortfolioManager:
                 daily_value = 0
                 
                 for symbol in self.holdings.keys():
-                    
+                    # Get holdings as of this date
                     symbol_trades = self.df_trades[
                         (self.df_trades['Symbol'] == symbol) & 
                         (self.df_trades['Date/Time'] <= date)
                     ]
                     
                     if not symbol_trades.empty:
-                        
-                        buy_qty = symbol_trades[symbol_trades['Quantity'] > 0]['Quantity'].sum()
-                        sell_qty = abs(symbol_trades[symbol_trades['Quantity'] < 0]['Quantity'].sum())
+                        # Calculate quantity held on this date using adjusted quantities
+                        buy_qty = symbol_trades[symbol_trades['adjusted_quantity'] > 0]['adjusted_quantity'].sum()
+                        sell_qty = abs(symbol_trades[symbol_trades['adjusted_quantity'] < 0]['adjusted_quantity'].sum())
                         net_qty = buy_qty - sell_qty
                         
                         if net_qty > 0:
-                            
+                            # Get historical price for this date (simplified - using current price)
+                            # In full implementation, you'd fetch historical prices
                             price = self.holdings[symbol]['current_price']
                             daily_value += net_qty * price
                 

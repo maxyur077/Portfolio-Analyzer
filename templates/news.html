@@ -1,0 +1,231 @@
+<!-- templates/news.html -->
+{% extends "base.html" %} {% block title %}Portfolio News - Portfolio Analyzer{%
+endblock %} {% block content %}
+<div class="container-fluid">
+  <!-- Page Header -->
+  <div class="d-sm-flex align-items-center justify-content-between mb-4">
+    <h1 class="h3 mb-0 text-gray-800">Portfolio News & Market Updates</h1>
+    <button
+      class="btn btn-primary btn-sm shadow-sm"
+      id="refreshNewsBtn"
+      onclick="refreshNews()"
+    >
+      <i class="fas fa-sync-alt fa-sm" id="refreshNewsIcon"></i>
+      <span id="refreshNewsBtnText">Refresh News</span>
+    </button>
+  </div>
+
+  <!-- News Tabs -->
+
+  <!-- Tab Content -->
+  <div class="tab-content" id="newsTabsContent">
+    <!-- Portfolio Holdings News -->
+    <div class="tab-pane fade show active" id="portfolio-news" role="tabpanel">
+      <div class="row mt-4" id="portfolio-news-container">
+        <div class="col-12 text-center">
+          <div class="spinner-border text-primary" role="status"></div>
+          <p class="mt-2">Loading portfolio news...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Market News -->
+    <div class="tab-pane fade" id="market-news" role="tabpanel">
+      <div class="row mt-4" id="market-news-container">
+        <div class="col-12 text-center">
+          <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Loading...</span>
+          </div>
+          <p class="mt-2">Loading market news...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  // Load portfolio-specific news
+  async function loadPortfolioNews() {
+    try {
+      const response = await fetch("/api/portfolio-news");
+      const newsData = await response.json();
+
+      const container = document.getElementById("portfolio-news-container");
+
+      if (newsData.error || Object.keys(newsData).length === 0) {
+        container.innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        No recent news found for your portfolio holdings.
+                    </div>
+                </div>
+            `;
+        return;
+      }
+
+      let html = "";
+      for (const [symbol, articles] of Object.entries(newsData)) {
+        html += `
+                <div class="col-12 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-chart-line me-2"></i>${symbol} News
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+            `;
+
+        articles.forEach((article) => {
+          const publishedDate = new Date(
+            article.publishedAt
+          ).toLocaleDateString();
+          html += `
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100 border-left-primary">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <a href="${article.url}" target="_blank" class="text-decoration-none">
+                                        ${article.title}
+                                    </a>
+                                </h6>
+                                <p class="card-text text-muted small">${article.description}</p>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted">
+                                        <i class="fas fa-calendar me-1"></i>${publishedDate}
+                                    </small>
+                                    <small class="text-muted">
+                                        <i class="fas fa-newspaper me-1"></i>${article.source}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+        });
+
+        html += `
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+      }
+
+      container.innerHTML = html;
+    } catch (error) {
+      console.error("Error loading portfolio news:", error);
+      document.getElementById("portfolio-news-container").innerHTML = `
+            <div class="col-12">
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Error loading portfolio news. Please try again later.
+                </div>
+            </div>
+        `;
+    }
+  }
+
+  // Load general market news
+  async function loadMarketNews() {
+    try {
+      const response = await fetch("/api/market-news");
+      const articles = await response.json();
+
+      const container = document.getElementById("market-news-container");
+
+      if (articles.error || articles.length === 0) {
+        container.innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        No recent market news available.
+                    </div>
+                </div>
+            `;
+        return;
+      }
+
+      let html = "";
+      articles.forEach((article) => {
+        const publishedDate = new Date(
+          article.publishedAt
+        ).toLocaleDateString();
+        html += `
+                <div class="col-lg-6 mb-4">
+                    <div class="card h-100 shadow">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <a href="${article.url}" target="_blank" class="text-decoration-none">
+                                    ${article.title}
+                                </a>
+                            </h5>
+                            <p class="card-text">${article.description}</p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    <i class="fas fa-calendar me-1"></i>${publishedDate}
+                                </small>
+                                <small class="text-muted">
+                                    <i class="fas fa-newspaper me-1"></i>${article.source}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+      });
+
+      container.innerHTML = html;
+    } catch (error) {
+      console.error("Error loading market news:", error);
+      document.getElementById("market-news-container").innerHTML = `
+            <div class="col-12">
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Error loading market news. Please try again later.
+                </div>
+            </div>
+        `;
+    }
+  }
+
+  // Refresh all news
+  async function refreshNews() {
+    const refreshBtn = document.getElementById("refreshNewsBtn");
+    const refreshIcon = document.getElementById("refreshNewsIcon");
+    const refreshBtnText = document.getElementById("refreshNewsBtnText");
+
+    refreshBtn.disabled = true;
+    refreshIcon.classList.add("fa-spin");
+    refreshBtnText.textContent = "Refreshing...";
+
+    try {
+      await Promise.all([loadPortfolioNews(), loadMarketNews()]);
+    } catch (error) {
+      console.error("Error refreshing news:", error);
+    } finally {
+      refreshBtn.disabled = false;
+      refreshIcon.classList.remove("fa-spin");
+      refreshBtnText.textContent = "Refresh News";
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    loadPortfolioNews();
+
+    document
+      .getElementById("market-news-tab")
+      .addEventListener("shown.bs.tab", function () {
+        if (
+          document
+            .getElementById("market-news-container")
+            .innerHTML.includes("Loading")
+        ) {
+          loadMarketNews();
+        }
+      });
+  });
+</script>
+{% endblock %}

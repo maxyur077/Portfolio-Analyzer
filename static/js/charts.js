@@ -8,9 +8,13 @@ Chart.defaults.color = "#858796";
 async function initializeCharts() {
   const isLoading = await checkDataLoading();
   if (!isLoading) {
-    await loadPortfolioChart();
-    await loadHoldingsPieChart();
-    await loadHoldingsData();
+    await Promise.all([
+      loadPortfolioSummary(),
+      loadPortfolioChart(),
+      loadHoldingsPieChart(),
+      loadHoldingsData(),
+      loadDashboardNews(),
+    ]);
   }
 }
 
@@ -23,6 +27,156 @@ async function checkDataLoading() {
     console.error("Error checking loading status:", error);
     return false;
   }
+}
+
+async function loadPortfolioSummary() {
+  try {
+    const response = await fetch("/api/portfolio-summary");
+    if (response.status === 202) {
+      console.log("Summary data still loading...");
+      return;
+    }
+
+    const summary = await response.json();
+
+    document.getElementById("total-holdings").textContent =
+      summary.total_holdings;
+    document.getElementById("value-usd").textContent =
+      "$" + number_format(summary.total_value_usd, 2);
+    document.getElementById("value-sgd").textContent =
+      "S$" + number_format(summary.total_value_sgd, 2);
+
+    const pnlElement = document.getElementById("unrealized-pnl");
+    const pnlValue = summary.total_unrealized_pnl;
+    const pnlClass = pnlValue >= 0 ? "text-success" : "text-danger";
+    const pnlSign = pnlValue >= 0 ? "+" : "";
+
+    pnlElement.className = `h5 mb-0 font-weight-bold ${pnlClass}`;
+    pnlElement.textContent = `${pnlSign}$${number_format(pnlValue, 2)}`;
+
+    console.log("Portfolio summary loaded successfully");
+  } catch (error) {
+    console.error("Error loading portfolio summary:", error);
+  }
+}
+
+async function loadDashboardNews() {
+  const loadingEl = document.getElementById("news-loading");
+  const errorEl = document.getElementById("news-error");
+  const emptyEl = document.getElementById("news-empty");
+  const contentEl = document.getElementById("news-content");
+  const refreshBtn = document.getElementById("news-refresh-btn");
+
+  showNewsState("loading");
+
+  if (refreshBtn) {
+    refreshBtn.disabled = true;
+    refreshBtn.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Loading...';
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+    const response = await fetch("/api/portfolio-news", {
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const newsData = await response.json();
+
+    if (!newsData || Object.keys(newsData).length === 0) {
+      showNewsState("empty");
+      return;
+    }
+
+    const allArticles = [];
+    for (const [symbol, articles] of Object.entries(newsData)) {
+      articles.forEach((article) => {
+        allArticles.push({ ...article, symbol });
+      });
+      if (allArticles.length >= 4) break;
+    }
+
+    const topArticles = allArticles.slice(0, 4);
+
+    if (topArticles.length === 0) {
+      showNewsState("empty");
+      return;
+    }
+
+    populateNewsArticles(topArticles);
+    showNewsState("content");
+
+    console.log("Dashboard news loaded successfully");
+  } catch (error) {
+    console.error("Error loading dashboard news:", error);
+
+    const errorMessage =
+      error.name === "AbortError"
+        ? "News loading timed out."
+        : "Unable to load news at this time.";
+
+    document.getElementById("news-error-message").textContent = errorMessage;
+    showNewsState("error");
+  } finally {
+    if (refreshBtn) {
+      refreshBtn.disabled = false;
+      refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+    }
+  }
+}
+
+function showNewsState(state) {
+  const states = ["loading", "error", "empty", "content"];
+
+  states.forEach((s) => {
+    const element = document.getElementById(`news-${s}`);
+    if (element) {
+      element.style.display = s === state ? "block" : "none";
+    }
+  });
+}
+
+function populateNewsArticles(articles) {
+  const contentEl = document.getElementById("news-content");
+  const template = document.getElementById("news-article-template");
+
+  if (!template) {
+    console.error("News article template not found");
+    return;
+  }
+
+  contentEl.innerHTML = "";
+
+  articles.forEach((article) => {
+    const clone = template.content.cloneNode(true);
+
+    const publishedDate = new Date(article.publishedAt).toLocaleDateString();
+    const truncatedTitle =
+      article.title.length > 60
+        ? article.title.substring(0, 60) + "..."
+        : article.title;
+    const truncatedDescription =
+      article.description.length > 100
+        ? article.description.substring(0, 100) + "..."
+        : article.description;
+
+    clone.querySelector(".news-symbol").textContent = article.symbol;
+    clone.querySelector(".news-date").textContent = publishedDate;
+    clone.querySelector(".news-title").textContent = truncatedTitle;
+    clone.querySelector(".news-title-link").href = article.url;
+    clone.querySelector(".news-description").textContent = truncatedDescription;
+    clone.querySelector(".news-source").textContent = article.source;
+    clone.querySelector(".news-read-link").href = article.url;
+
+    contentEl.appendChild(clone);
+  });
 }
 
 async function loadPortfolioChart(currency = "USD") {

@@ -1,69 +1,103 @@
-
-import logging
+# models/splits.py (Enhanced Version)
 import pandas as pd
+import numpy as np
 import yfinance as yf
+import logging
+from datetime import datetime, timedelta
 
 class SplitAdjuster:
-    """
-    Adjusts the historical trade DataFrame for all stock splits that
-    actually happened between the first and last trade in the CSV files.
-    """
-
-    def adjust_for_splits(self, df_trades: pd.DataFrame) -> pd.DataFrame:
+    def __init__(self):
+        self.splits_cache = {}
+        
+    def adjust_for_splits(self, df_trades):
+        """Enhanced split adjustment with better logging and validation"""
         if df_trades.empty:
             return df_trades
-
-        df_adj = df_trades.copy()
-
-        for symbol in df_adj['Symbol'].unique():
+            
+        # Create copies for adjustment
+        df_adjusted = df_trades.copy()
+        df_adjusted['split_adjusted'] = False
+        
+        # Group by symbol and process each
+        for symbol in df_adjusted['Symbol'].unique():
             try:
-                ticker = yf.Ticker(symbol)
-                splits: pd.Series = ticker.splits
-
-                if splits.empty:
+                symbol_splits = self._get_splits_for_symbol(symbol)
+                if symbol_splits.empty:
                     continue
-
+                    
+                symbol_mask = df_adjusted['Symbol'] == symbol
+                symbol_trades = df_adjusted[symbol_mask].copy()
                 
-                symbol_trades = df_adj[df_adj['Symbol'] == symbol]
-                trade_dates = pd.to_datetime(symbol_trades['Date/Time'])
+                # Apply split adjustments
+                adjusted_trades = self._apply_splits_to_trades(symbol_trades, symbol_splits, symbol)
+                df_adjusted.loc[symbol_mask] = adjusted_trades
                 
-                if trade_dates.dt.tz is not None:
-                    trade_dates = trade_dates.dt.tz_localize(None)
-                
-                first_date = trade_dates.min().normalize()
-                last_date = trade_dates.max().normalize()
-
-                for split_date, ratio in splits.items():
-                    
-                    if hasattr(split_date, 'tz') and split_date.tz is not None:
-                        split_date_naive = split_date.tz_localize(None)
-                    else:
-                        split_date_naive = split_date
-                    
-                    split_date_naive = pd.Timestamp(split_date_naive).normalize()
-                    
-                    
-                    if not (first_date <= split_date_naive <= last_date):
-                        continue
-
-                    logging.info(f"Applying split adjustment: {symbol} {split_date_naive.strftime('%Y-%m-%d')} ratio {ratio}:1")
-
-                    
-                    trade_datetime_naive = pd.to_datetime(df_adj['Date/Time'])
-                    if trade_datetime_naive.dt.tz is not None:
-                        trade_datetime_naive = trade_datetime_naive.dt.tz_localize(None)
-                    
-                    mask = (df_adj['Symbol'] == symbol) & (trade_datetime_naive < split_date_naive)
-
-                    df_adj.loc[mask, 'adjusted_quantity'] = (
-                        df_adj.loc[mask, 'adjusted_quantity'] * ratio
-                    )
-                    df_adj.loc[mask, 'adjusted_price'] = (
-                        df_adj.loc[mask, 'adjusted_price'] / ratio
-                    )
-
             except Exception as e:
-                logging.warning(f"Split adjustment failed for {symbol}: {e}")
+                logging.error(f"Error adjusting splits for {symbol}: {e}")
                 continue
-
-        return df_adj
+        
+        return df_adjusted
+    
+    def _get_splits_for_symbol(self, symbol):
+        """Get splits with caching and enhanced error handling"""
+        if symbol in self.splits_cache:
+            return self.splits_cache[symbol]
+            
+        try:
+            ticker = yf.Ticker(symbol)
+            splits = ticker.splits
+            
+            if splits.empty:
+                self.splits_cache[symbol] = pd.Series(dtype=float)
+                return pd.Series(dtype=float)
+            
+            # Convert to timezone-naive if needed
+            if hasattr(splits.index, 'tz') and splits.index.tz is not None:
+                splits.index = splits.index.tz_localize(None)
+                
+            # Filter splits from last 10 years to avoid very old splits
+            cutoff_date = datetime.now() - timedelta(days=3650)
+            recent_splits = splits[splits.index >= cutoff_date]
+            
+            self.splits_cache[symbol] = recent_splits
+            logging.info(f"Found {len(recent_splits)} recent splits for {symbol}")
+            
+            return recent_splits
+            
+        except Exception as e:
+            logging.error(f"Error fetching splits for {symbol}: {e}")
+            self.splits_cache[symbol] = pd.Series(dtype=float)
+            return pd.Series(dtype=float)
+    
+    def _apply_splits_to_trades(self, trades, splits, symbol):
+        """Apply split adjustments to trades with detailed logging"""
+        if splits.empty:
+            return trades
+            
+        trades = trades.copy()
+        trades['adjusted_quantity'] = trades['Quantity'].astype(float)
+        trades['adjusted_price'] = trades['T. Price'].astype(float)
+        
+        for split_date, split_ratio in splits.items():
+            try:
+                # Convert trade dates to datetime for comparison
+                trade_dates = pd.to_datetime(trades['Date/Time'])
+                
+                # Find trades before split date
+                pre_split_mask = trade_dates.dt.normalize() < split_date.normalize()
+                
+                if pre_split_mask.any():
+                    # Adjust quantity (multiply by split ratio)
+                    trades.loc[pre_split_mask, 'adjusted_quantity'] *= float(split_ratio)
+                    # Adjust price (divide by split ratio)  
+                    trades.loc[pre_split_mask, 'adjusted_price'] /= float(split_ratio)
+                    trades.loc[pre_split_mask, 'split_adjusted'] = True
+                    
+                    affected_count = pre_split_mask.sum()
+                    logging.info(f"Applied {split_ratio}:1 split for {symbol} on {split_date.date()}, affected {affected_count} trades")
+                    
+            except Exception as e:
+                logging.error(f"Error applying split {split_ratio} for {symbol} on {split_date}: {e}")
+                continue
+        
+        return trades

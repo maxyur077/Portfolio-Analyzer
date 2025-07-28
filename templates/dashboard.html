@@ -49,6 +49,7 @@ endblock %} {% block content %}
     </div>
   </div>
 
+  <!-- Summary Cards Row -->
   <div class="row">
     <div class="col-xl-3 col-md-6 mb-4">
       <div class="card border-left-primary shadow h-100 py-2">
@@ -142,7 +143,7 @@ endblock %} {% block content %}
     </div>
   </div>
 
-  <!-- Content Row - Charts -->
+  <!-- Charts Row -->
   <div class="row">
     <!-- Area Chart -->
     <div class="col-xl-8 col-lg-7">
@@ -167,7 +168,6 @@ endblock %} {% block content %}
             </a>
             <div
               class="dropdown-menu dropdown-menu-right shadow animated--fade-in"
-              aria-labelledby="dropdownMenuLink"
             >
               <div class="dropdown-header">Currency:</div>
               <a
@@ -214,6 +214,129 @@ endblock %} {% block content %}
       </div>
     </div>
   </div>
+
+  <!-- Portfolio News Section - Single Row Layout -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card shadow mb-4">
+        <div
+          class="card-header py-3 d-flex justify-content-between align-items-center"
+        >
+          <h6 class="m-0 font-weight-bold text-primary">
+            <i class="fas fa-newspaper me-2"></i>Latest Portfolio News
+          </h6>
+          <div>
+            <a href="{{ url_for('news_page') }}" class="btn btn-primary btn-sm">
+              View All News <i class="fas fa-arrow-right ms-1"></i>
+            </a>
+          </div>
+        </div>
+        <div class="card-body">
+          <!-- Loading State -->
+          <div id="news-loading" class="text-center">
+            <div
+              class="spinner-border spinner-border-sm text-primary"
+              role="status"
+            >
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <span class="ml-2">Loading latest news...</span>
+          </div>
+
+          <!-- Error State -->
+          <div
+            id="news-error"
+            class="alert alert-warning mb-0"
+            style="display: none"
+          >
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <span id="news-error-message"
+              >Unable to load news at this time.</span
+            >
+            <a href="javascript:loadDashboardNews()" class="alert-link ms-2"
+              >Try again</a
+            >
+          </div>
+
+          <!-- No News State -->
+          <div
+            id="news-empty"
+            class="alert alert-info mb-0"
+            style="display: none"
+          >
+            <i class="fas fa-info-circle me-2"></i>
+            No recent news available for your holdings.
+          </div>
+
+          <!-- News Content - FORCED SINGLE ROW -->
+          <div
+            id="news-content"
+            class="d-flex flex-nowrap overflow-auto"
+            style="display: none"
+          >
+            <!-- News articles will be populated here in a single horizontal row -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Updated News Article Template for Single Row -->
+  <template id="news-article-template">
+    <div class="flex-shrink-0" style="width: 325px; margin-right: 15px">
+      <div class="card h-100 border-left-primary">
+        <div class="card-body p-3">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <span class="badge badge-primary badge-sm news-symbol"></span>
+            <small
+              class="text-muted news-date"
+              style="font-size: 0.7rem"
+            ></small>
+          </div>
+          <h6
+            class="card-title"
+            style="
+              font-size: 0.85rem;
+              line-height: 1.2;
+              height: 2.4rem;
+              overflow: hidden;
+            "
+          >
+            <a
+              href="#"
+              target="_blank"
+              class="text-decoration-none text-dark news-title-link"
+            >
+              <span class="news-title"></span>
+            </a>
+          </h6>
+          <p
+            class="card-text small text-muted mb-2 news-description"
+            style="
+              font-size: 0.75rem;
+              line-height: 1.1;
+              height: 3.3rem;
+              overflow: hidden;
+            "
+          ></p>
+          <div class="d-flex justify-content-between align-items-center">
+            <small class="text-muted" style="font-size: 0.7rem">
+              <i class="fas fa-newspaper me-1"></i
+              ><span class="news-source"></span>
+            </small>
+            <a
+              href="#"
+              target="_blank"
+              class="btn btn-sm btn-outline-primary news-read-link"
+              style="font-size: 0.7rem; padding: 0.2rem 0.4rem"
+            >
+              Read
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
 
   <!-- Holdings Table -->
   <div class="card shadow mb-4">
@@ -266,6 +389,43 @@ endblock %} {% block content %}
   </div>
   {% endif %}
 </div>
+
+<!-- News Article Template (Hidden) -->
+<template id="news-article-template">
+  <div class="col-md-4 mb-3">
+    <div class="card h-100 border-left-primary">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <span class="badge badge-primary badge-sm news-symbol"></span>
+          <small class="text-muted news-date"></small>
+        </div>
+        <h6 class="card-title">
+          <a
+            href="#"
+            target="_blank"
+            class="text-decoration-none text-dark news-title-link"
+          >
+            <span class="news-title"></span>
+          </a>
+        </h6>
+        <p class="card-text small text-muted mb-2 news-description"></p>
+        <div class="d-flex justify-content-between align-items-center">
+          <small class="text-muted">
+            <i class="fas fa-newspaper me-1"></i
+            ><span class="news-source"></span>
+          </small>
+          <a
+            href="#"
+            target="_blank"
+            class="btn btn-sm btn-outline-primary news-read-link"
+          >
+            Read <i class="fas fa-external-link-alt"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
 {% endblock %} {% block scripts %}
 <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
 <script>
